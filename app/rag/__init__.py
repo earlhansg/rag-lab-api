@@ -1,1 +1,2 @@
 from .pinecone import embed_and_save_to_pinecone
+from .query import retrieve_with_expansion, answer_with_context

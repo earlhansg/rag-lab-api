@@ -4,9 +4,10 @@ from app.db import create_db_and_tables, Document, get_async_session
 from contextlib import asynccontextmanager
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from pydantic import BaseModel
 import os
 import shutil
-from app.rag import embed_and_save_to_pinecone
+from app.rag import embed_and_save_to_pinecone, retrieve_with_expansion, answer_with_context
 from uuid import UUID
 
 @asynccontextmanager
@@ -55,6 +56,29 @@ async def get_all_files(session: AsyncSession = Depends(get_async_session)):
             for doc in documents
         ]
     }
+
+class QueryRequest(BaseModel):
+    query: str
+    document_id: str | None = None
+    top_k: int = 5
+
+
+@app.post("/query")
+async def query_documents(body: QueryRequest):
+    chunks = await retrieve_with_expansion(
+        query=body.query,
+        top_k=body.top_k,
+        document_id=body.document_id,
+    )
+    answer = await answer_with_context(body.query, chunks)
+    return {
+        "answer": answer,
+        "sources": [
+            {"document_id": c["document_id"], "page": c["page"], "score": round(c["score"], 4)}
+            for c in chunks
+        ],
+    }
+
 
 @app.delete("/delete-file/{document_id}")
 async def delete_all_files(document_id: UUID, session: AsyncSession = Depends(get_async_session)):
