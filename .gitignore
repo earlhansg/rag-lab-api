@@ -8,3 +8,10 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Environment variables (never commit secrets)
+.env
+
+# Uploaded files and local database
+app/knowledge/
+*.db

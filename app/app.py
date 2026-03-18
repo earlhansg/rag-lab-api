@@ -6,6 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 import os
 import shutil
+from app.rag import embed_and_save_to_pinecone
+from uuid import UUID
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -30,6 +32,9 @@ async def upload_file(file: UploadFile = File(...), session: AsyncSession = Depe
     await session.commit()
     await session.refresh(doc)
 
+    # Generate embeddings and save to Pinecone
+    await embed_and_save_to_pinecone(str(doc.id), file_path)
+
     return {"message": "File uploaded successfully!", "document_id": doc.id}
 
 @app.get("/files")
@@ -50,3 +55,20 @@ async def get_all_files(session: AsyncSession = Depends(get_async_session)):
             for doc in documents
         ]
     }
+
+@app.delete("/delete-file/{document_id}")
+async def delete_all_files(document_id: UUID, session: AsyncSession = Depends(get_async_session)):
+    result = await session.execute(select(Document).where(Document.id == document_id))
+    document = result.scalar_one_or_none()
+    if not document:
+        return {"error": "Document not found."}
+    
+    # Delete the file from disk
+    if os.path.exists(document.path):
+        os.remove(document.path)
+    
+    # Delete the document record from the database
+    await session.delete(document)
+    await session.commit()
+    
+    return {"message": "File deleted successfully!"}
